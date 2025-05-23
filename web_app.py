@@ -4,9 +4,52 @@ from folder_analyzer import FolderAnalyzer
 import os
 from pathlib import Path
 import threading
+import time
+import json
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
+
+# Constants
+HISTORY_FILE = 'folder_history.json'
+MAX_HISTORY = 10  # Maximum number of folders to remember
+
+def load_history():
+    """Load folder history from file."""
+    try:
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return []
+
+def save_history(folder_path):
+    """Save folder to history."""
+    history = load_history()
+    
+    # Create history entry with timestamp
+    entry = {
+        'path': folder_path,
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'name': os.path.basename(folder_path) or folder_path
+    }
+    
+    # Remove if already exists
+    history = [h for h in history if h['path'] != folder_path]
+    
+    # Add to front of list
+    history.insert(0, entry)
+    
+    # Keep only MAX_HISTORY items
+    history = history[:MAX_HISTORY]
+    
+    try:
+        with open(HISTORY_FILE, 'w') as f:
+            json.dump(history, f)
+    except Exception:
+        pass
 
 # Security headers
 @app.after_request
@@ -34,7 +77,8 @@ class WebAnalyzer(FolderAnalyzer):
             'file_types': [],
             'largest_files': [],
             'newest_files': [],
-            'progress': self.get_progress()
+            'progress': self.get_progress(),
+            'warnings': self.stats['progress']['warnings']
         }
 
         # Content Groups
@@ -80,6 +124,11 @@ class WebAnalyzer(FolderAnalyzer):
 def index():
     return render_template('index.html')
 
+@app.route('/history')
+def get_history():
+    """Get the folder analysis history."""
+    return jsonify(load_history())
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     global current_analyzer
@@ -95,7 +144,18 @@ def analyze():
             analyzer.scan()
             results = analyzer.display_results()
             current_analyzer = None
+            
+            # Save to history only if analysis was successful
+            save_history(folder_path)
+            
+            # Check for warnings
+            if analyzer.stats['progress']['warnings']:
+                results['warnings'] = analyzer.stats['progress']['warnings']
+                
             return jsonify(results)
+    except ValueError as e:
+        current_analyzer = None
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         current_analyzer = None
         return jsonify({'error': str(e)}), 500
@@ -108,12 +168,22 @@ def get_progress():
     
     try:
         progress = current_analyzer.get_progress()
+        if current_analyzer.stats['progress']['warnings']:
+            progress['warnings'] = current_analyzer.stats['progress']['warnings']
         return jsonify(progress)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/cancel', methods=['POST'])
+def cancel_analysis():
+    """Cancel the current analysis."""
+    global current_analyzer
+    if current_analyzer is not None:
+        current_analyzer = None
+        return jsonify({'message': 'Analysis cancelled'})
+    return jsonify({'message': 'No analysis in progress'}), 404
+
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     Path('templates').mkdir(exist_ok=True)
-    # Run without exposing debug PIN
     app.run(debug=True, port=5000, use_debugger=False) 

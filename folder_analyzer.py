@@ -10,6 +10,12 @@ import mimetypes
 import time
 
 class FolderAnalyzer:
+    # Maximum limits
+    MAX_FILES = 10000  # Maximum number of files to analyze
+    MAX_SIZE_GB = 50   # Maximum total size in GB to analyze
+    MAX_TIME_SECONDS = 900  # Maximum analysis time (15 minutes)
+    MAX_CLOUD_FILE_SIZE_MB = 10  # Maximum size for cloud storage files (10MB)
+
     def __init__(self, root_path):
         self.root_path = Path(root_path)
         self.stats = {
@@ -28,7 +34,8 @@ class FolderAnalyzer:
                 'current_file': '',
                 'stage': 'Initializing',
                 'start_time': None,
-                'elapsed_time': 0
+                'elapsed_time': 0,
+                'warnings': []
             }
         }
         self.mime = magic.Magic(mime=True)
@@ -39,6 +46,60 @@ class FolderAnalyzer:
             'java': ['pom.xml', 'build.gradle'],
             'docker': ['Dockerfile', 'docker-compose.yml']
         }
+        self.total_size = 0
+        self.start_time = None
+        self.is_cloud_storage = self.check_if_cloud_storage(root_path)
+
+    def check_if_cloud_storage(self, path):
+        """Check if path is in a cloud storage folder."""
+        cloud_indicators = [
+            'OneDrive',
+            'Dropbox',
+            'Google Drive',
+            'iCloudDrive',
+            'Box'
+        ]
+        path_str = str(path).lower()
+        return any(indicator.lower() in path_str for indicator in cloud_indicators)
+
+    def should_skip_file(self, file_path):
+        """Determine if a file should be skipped."""
+        try:
+            # Skip if file is a symlink
+            if file_path.is_symlink():
+                return True
+
+            # Check if file exists and is readable
+            if not file_path.exists() or not os.access(file_path, os.R_OK):
+                return True
+
+            # Get file size
+            try:
+                file_size = file_path.stat().st_size
+            except (OSError, IOError):
+                # If we can't get the size, skip the file
+                self.stats['progress']['warnings'].append(f"Cannot access file: {file_path}")
+                return True
+
+            # Special handling for cloud storage files
+            if self.is_cloud_storage:
+                # Skip large files in cloud storage to prevent long downloads
+                if file_size > (self.MAX_CLOUD_FILE_SIZE_MB * 1024 * 1024):
+                    self.stats['progress']['warnings'].append(
+                        f"Skipping large cloud file ({self.human_size(file_size)}): {file_path}"
+                    )
+                    return True
+
+            # Check overall size limit
+            if self.total_size + file_size > (self.MAX_SIZE_GB * 1024 * 1024 * 1024):
+                self.stats['progress']['warnings'].append(f"Size limit reached ({self.MAX_SIZE_GB}GB)")
+                return True
+
+            self.total_size += file_size
+            return False
+        except Exception as e:
+            self.stats['progress']['warnings'].append(f"Error accessing {file_path}: {str(e)}")
+            return True
 
     def update_progress(self, stage, current=None, total=None, current_file=None):
         """Update the progress information."""
@@ -193,51 +254,78 @@ class FolderAnalyzer:
 
     def scan(self):
         """Scan the folder and collect information."""
-        self.stats['progress']['start_time'] = time.time()
+        self.start_time = time.time()
+        self.stats['progress']['start_time'] = self.start_time
         self.update_progress("Detecting project type")
         
+        # Add warning for cloud storage
+        if self.is_cloud_storage:
+            self.stats['progress']['warnings'].append(
+                f"Analyzing cloud storage folder. Files larger than {self.MAX_CLOUD_FILE_SIZE_MB}MB will be skipped to prevent long downloads."
+            )
+
         # Detect project type first
         self.stats['project_type'] = self.detect_project_type()
         
         # Count total files first
         self.update_progress("Counting files")
-        files = list(self.root_path.rglob('*'))
-        total_files = sum(1 for f in files if f.is_file())
-        self.update_progress("Analyzing files", 0, total_files)
+        files = []
+        total_files = 0
+        
+        for file_path in self.root_path.rglob('*'):
+            if time.time() - self.start_time > self.MAX_TIME_SECONDS:
+                self.stats['progress']['warnings'].append(f"Analysis timeout after {self.MAX_TIME_SECONDS} seconds")
+                break
+                
+            if file_path.is_file() and not self.should_skip_file(file_path):
+                total_files += 1
+                files.append(file_path)
+                
+                if total_files >= self.MAX_FILES:
+                    self.stats['progress']['warnings'].append(f"File limit reached ({self.MAX_FILES} files)")
+                    break
+
+        self.update_progress("Analyzing files", 0, len(files))
         
         current_file_count = 0
         for file_path in files:
-            if file_path.is_file():
-                current_file_count += 1
-                self.update_progress(
-                    "Analyzing files",
-                    current_file_count,
-                    total_files,
-                    str(file_path.relative_to(self.root_path))
-                )
+            if time.time() - self.start_time > self.MAX_TIME_SECONDS:
+                break
                 
-                file_info = self.get_file_info(file_path)
-                self.stats['total_files'] += 1
-                self.stats['total_size'] += file_info['size']
-                
-                # Group by content type
-                content_type = file_info.get('type', 'unknown')
-                self.stats['content_groups'][content_type].append(file_info)
-                
-                # Track file types
-                self.stats['file_types'][content_type] = self.stats['file_types'].get(content_type, 0) + 1
-                
-                # Track largest files
-                self.stats['largest_files'].append(file_info)
-                self.stats['largest_files'].sort(key=lambda x: x['size'], reverse=True)
-                self.stats['largest_files'] = self.stats['largest_files'][:10]
-                
-                # Track newest files
-                self.stats['newest_files'].append(file_info)
-                self.stats['newest_files'].sort(key=lambda x: x['modified'], reverse=True)
-                self.stats['newest_files'] = self.stats['newest_files'][:10]
+            current_file_count += 1
+            self.update_progress(
+                "Analyzing files",
+                current_file_count,
+                len(files),
+                str(file_path.relative_to(self.root_path))
+            )
+            
+            file_info = self.get_file_info(file_path)
+            self.stats['total_files'] += 1
+            self.stats['total_size'] += file_info['size']
+            
+            # Group by content type
+            content_type = file_info.get('type', 'unknown')
+            self.stats['content_groups'][content_type].append(file_info)
+            
+            # Track file types
+            self.stats['file_types'][content_type] = self.stats['file_types'].get(content_type, 0) + 1
+            
+            # Track largest files
+            self.stats['largest_files'].append(file_info)
+            self.stats['largest_files'].sort(key=lambda x: x['size'], reverse=True)
+            self.stats['largest_files'] = self.stats['largest_files'][:10]
+            
+            # Track newest files
+            self.stats['newest_files'].append(file_info)
+            self.stats['newest_files'].sort(key=lambda x: x['modified'], reverse=True)
+            self.stats['newest_files'] = self.stats['newest_files'][:10]
 
-        self.update_progress("Analysis complete", total_files, total_files)
+        self.update_progress(
+            "Analysis complete" if not self.stats['progress']['warnings'] else "Analysis completed with warnings",
+            len(files),
+            len(files)
+        )
 
     def human_size(self, size):
         """Convert size in bytes to human readable format."""

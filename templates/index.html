@@ -4,282 +4,279 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Folder Analyzer</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .hidden { display: none; }
+        .progress { height: 25px; }
+        .warning-text { color: #dc3545; }
+        .history-item {
+            cursor: pointer;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        .history-item:hover {
+            background-color: #f8f9fa;
+        }
+        .history-timestamp {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto px-4 py-8">
-        <h1 class="text-4xl font-bold mb-8 text-center text-gray-800">Folder Analyzer</h1>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Folder Analyzer</h1>
         
-        <!-- Folder Input -->
-        <div class="mb-8 max-w-xl mx-auto">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="folderPath">
-                    Folder Path
-                </label>
-                <div class="flex">
-                    <input type="text" id="folderPath" 
-                           class="flex-1 shadow appearance-none border rounded py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                           placeholder="Enter folder path or use current directory">
-                    <button onclick="analyzePath()" id="analyzeButton"
-                            class="ml-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-                        Analyze
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <input type="text" id="folderPath" class="form-control" placeholder="Enter folder path">
+                    <button class="btn btn-primary" onclick="analyzePath()">Analyze</button>
+                    <button class="btn btn-outline-secondary" onclick="toggleHistory()">
+                        <i class="bi bi-clock-history"></i> History
                     </button>
                 </div>
             </div>
         </div>
 
+        <!-- History Dropdown -->
+        <div id="historyPanel" class="card mb-4 hidden" style="max-width: 600px;">
+            <div class="card-header">
+                Recent Folders
+                <button type="button" class="btn-close float-end" onclick="toggleHistory()"></button>
+            </div>
+            <div class="card-body p-0" id="historyList">
+                <!-- History items will be inserted here -->
+            </div>
+        </div>
+
         <!-- Progress Section -->
-        <div id="progress" class="mb-8 max-w-xl mx-auto hidden">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-lg font-semibold mb-4">Analysis Progress</h3>
-                <div class="mb-4">
-                    <div class="flex justify-between mb-1">
-                        <span id="progressStage" class="text-sm font-medium text-gray-700">Initializing...</span>
-                        <span id="progressPercentage" class="text-sm font-medium text-gray-700">0%</span>
+        <div id="progressSection" class="hidden">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Analysis Progress</h5>
+                    <div class="progress mb-3">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"></div>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5">
-                        <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-                    </div>
-                </div>
-                <div class="text-sm text-gray-600">
-                    <p id="currentFile" class="truncate"></p>
-                    <p id="elapsedTime"></p>
+                    <p id="progressText" class="mb-2"></p>
+                    <p id="progressWarnings" class="warning-text"></p>
+                    <button id="cancelButton" class="btn btn-danger" onclick="cancelAnalysis()">Cancel Analysis</button>
                 </div>
             </div>
         </div>
 
-        <!-- Loading Indicator -->
-        <div id="loading" class="hidden">
-            <div class="flex justify-center items-center">
-                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-            </div>
-        </div>
-
-        <!-- Results Container -->
-        <div id="results" class="hidden">
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden">
             <!-- Project Overview -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-semibold mb-2">Project Type</h3>
-                    <p id="projectType" class="text-2xl font-bold text-blue-600"></p>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Project Overview</h5>
                 </div>
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-semibold mb-2">Total Files</h3>
-                    <p id="totalFiles" class="text-2xl font-bold text-green-600"></p>
-                </div>
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-semibold mb-2">Total Size</h3>
-                    <p id="totalSize" class="text-2xl font-bold text-purple-600"></p>
+                <div class="card-body">
+                    <div id="projectOverview"></div>
                 </div>
             </div>
 
-            <!-- Charts -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-semibold mb-4">File Types Distribution</h3>
-                    <canvas id="fileTypesChart"></canvas>
+            <!-- File Types -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">File Types</h5>
                 </div>
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-semibold mb-4">Content Analysis</h3>
-                    <div id="contentAnalysis" class="overflow-auto max-h-96"></div>
+                <div class="card-body">
+                    <div id="fileTypes"></div>
                 </div>
             </div>
 
-            <!-- Tables -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-semibold mb-4">Largest Files</h3>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full table-auto">
-                            <thead>
-                                <tr class="bg-gray-100">
-                                    <th class="px-4 py-2 text-left">Size</th>
-                                    <th class="px-4 py-2 text-left">Path</th>
-                                </tr>
-                            </thead>
-                            <tbody id="largestFiles"></tbody>
-                        </table>
-                    </div>
+            <!-- Largest Files -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Largest Files</h5>
                 </div>
-                <div class="bg-white rounded-lg shadow-md p-6">
-                    <h3 class="text-lg font-semibold mb-4">Recent Files</h3>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full table-auto">
-                            <thead>
-                                <tr class="bg-gray-100">
-                                    <th class="px-4 py-2 text-left">Modified</th>
-                                    <th class="px-4 py-2 text-left">Path</th>
-                                </tr>
-                            </thead>
-                            <tbody id="newestFiles"></tbody>
-                        </table>
-                    </div>
+                <div class="card-body">
+                    <div id="largestFiles"></div>
+                </div>
+            </div>
+
+            <!-- Newest Files -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Newest Files</h5>
+                </div>
+                <div class="card-body">
+                    <div id="newestFiles"></div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        let fileTypesChart = null;
+        let analysisInProgress = false;
         let progressInterval = null;
 
-        function formatTime(seconds) {
-            if (seconds < 60) return `${Math.round(seconds)}s`;
-            const minutes = Math.floor(seconds / 60);
-            seconds = Math.round(seconds % 60);
-            return `${minutes}m ${seconds}s`;
+        async function loadHistory() {
+            try {
+                const response = await fetch('/history');
+                const history = await response.json();
+                const historyList = document.getElementById('historyList');
+                historyList.innerHTML = '';
+
+                if (history.length === 0) {
+                    historyList.innerHTML = '<div class="p-3 text-muted">No history yet</div>';
+                    return;
+                }
+
+                history.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'history-item';
+                    div.innerHTML = `
+                        <div>${item.name}</div>
+                        <div class="history-timestamp">${item.timestamp}</div>
+                        <div class="text-muted small">${item.path}</div>
+                    `;
+                    div.onclick = () => {
+                        document.getElementById('folderPath').value = item.path;
+                        toggleHistory();
+                    };
+                    historyList.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading history:', error);
+            }
         }
 
-        async function checkProgress() {
-            try {
-                const response = await fetch('http://localhost:5000/progress');
-                const progress = await response.json();
-                
-                if (response.ok) {
-                    document.getElementById('progressStage').textContent = progress.stage;
-                    document.getElementById('progressPercentage').textContent = `${Math.round(progress.percentage)}%`;
-                    document.getElementById('progressBar').style.width = `${progress.percentage}%`;
-                    
-                    if (progress.current_file) {
-                        document.getElementById('currentFile').textContent = `Current file: ${progress.current_file}`;
-                    }
-                    
-                    if (progress.elapsed_time) {
-                        document.getElementById('elapsedTime').textContent = `Elapsed time: ${formatTime(progress.elapsed_time)}`;
-                    }
-
-                    if (progress.stage === 'Analysis complete') {
-                        clearInterval(progressInterval);
-                    }
-                } else {
-                    clearInterval(progressInterval);
-                }
-            } catch (error) {
-                console.error('Failed to fetch progress:', error);
+        function toggleHistory() {
+            const panel = document.getElementById('historyPanel');
+            if (panel.classList.contains('hidden')) {
+                loadHistory();
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
             }
         }
 
         async function analyzePath() {
-            const path = document.getElementById('folderPath').value || '.';
-            const analyzeButton = document.getElementById('analyzeButton');
+            const path = document.getElementById('folderPath').value;
+            if (!path) {
+                alert('Please enter a folder path');
+                return;
+            }
+
+            // Reset UI
+            document.getElementById('progressSection').classList.remove('hidden');
+            document.getElementById('resultsSection').classList.add('hidden');
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressWarnings').textContent = '';
             
-            // Show progress and disable button
-            document.getElementById('progress').classList.remove('hidden');
-            document.getElementById('results').classList.add('hidden');
-            analyzeButton.disabled = true;
-            analyzeButton.classList.add('opacity-50');
-            
-            // Start progress checking
-            progressInterval = setInterval(checkProgress, 500);
-            
+            analysisInProgress = true;
+            startProgressCheck();
+
             try {
-                const response = await fetch('http://localhost:5000/analyze', {
+                const response = await fetch('/analyze', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ path }),
+                    body: JSON.stringify({ path: path })
                 });
-                
+
                 const data = await response.json();
-                if (response.ok) {
-                    displayResults(data);
-                } else {
-                    alert(data.error || 'An error occurred');
+                if (!response.ok) {
+                    throw new Error(data.error || 'Analysis failed');
                 }
+
+                displayResults(data);
             } catch (error) {
-                alert('Failed to analyze folder: ' + error);
+                alert(error.message);
             } finally {
+                analysisInProgress = false;
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                }
+            }
+        }
+
+        function startProgressCheck() {
+            if (progressInterval) {
                 clearInterval(progressInterval);
-                analyzeButton.disabled = false;
-                analyzeButton.classList.remove('opacity-50');
+            }
+
+            progressInterval = setInterval(async () => {
+                if (!analysisInProgress) {
+                    clearInterval(progressInterval);
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/progress');
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        updateProgress(data);
+                    }
+                } catch (error) {
+                    console.error('Error checking progress:', error);
+                }
+            }, 1000);
+        }
+
+        function updateProgress(data) {
+            const bar = document.getElementById('progressBar');
+            const text = document.getElementById('progressText');
+            const warnings = document.getElementById('progressWarnings');
+
+            bar.style.width = `${data.percentage}%`;
+            bar.setAttribute('aria-valuenow', data.percentage);
+            
+            text.textContent = `${data.stage}: ${data.current_file || ''}`;
+            
+            if (data.warnings && data.warnings.length > 0) {
+                warnings.textContent = data.warnings.join('\n');
+            }
+        }
+
+        async function cancelAnalysis() {
+            try {
+                await fetch('/cancel', { method: 'POST' });
+                analysisInProgress = false;
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                }
+                document.getElementById('progressSection').classList.add('hidden');
+            } catch (error) {
+                console.error('Error cancelling analysis:', error);
             }
         }
 
         function displayResults(data) {
-            // Show results container
-            document.getElementById('results').classList.remove('hidden');
-            
-            // Update overview
-            document.getElementById('projectType').textContent = data.project_overview.project_type;
-            document.getElementById('totalFiles').textContent = data.project_overview.total_files;
-            document.getElementById('totalSize').textContent = data.project_overview.total_size;
+            document.getElementById('progressSection').classList.add('hidden');
+            document.getElementById('resultsSection').classList.remove('hidden');
 
-            // Update file types chart
-            updateFileTypesChart(data.file_types);
+            // Project Overview
+            const overview = data.project_overview;
+            document.getElementById('projectOverview').innerHTML = `
+                <p><strong>Project Type:</strong> ${overview.project_type}</p>
+                <p><strong>Total Files:</strong> ${overview.total_files}</p>
+                <p><strong>Total Size:</strong> ${overview.total_size}</p>
+            `;
 
-            // Update content analysis
-            const contentAnalysisHtml = Object.entries(data.content_analysis)
-                .map(([type, info]) => `
-                    <div class="mb-4">
-                        <h4 class="font-semibold text-gray-700">${type} (${info.count} files)</h4>
-                        <ul class="list-disc list-inside">
-                            ${info.files.map(file => `
-                                <li class="ml-4 text-sm">
-                                    ${file.path}
-                                    ${file.dependencies.length ? 
-                                        `<br><span class="text-gray-600 text-xs">Dependencies: ${file.dependencies.join(', ')}</span>` 
-                                        : ''}
-                                    ${file.purpose ? 
-                                        `<br><span class="text-gray-600 text-xs">Purpose: ${file.purpose}</span>` 
-                                        : ''}
-                                </li>
-                            `).join('')}
-                        </ul>
-                    </div>
-                `).join('');
-            document.getElementById('contentAnalysis').innerHTML = contentAnalysisHtml;
+            // File Types
+            const fileTypesHtml = data.file_types
+                .map(type => `<p><strong>${type.type}:</strong> ${type.count} files</p>`)
+                .join('');
+            document.getElementById('fileTypes').innerHTML = fileTypesHtml;
 
-            // Update largest files
+            // Largest Files
             const largestFilesHtml = data.largest_files
-                .map(file => `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-2">${file.size}</td>
-                        <td class="px-4 py-2 truncate max-w-xs">${file.path}</td>
-                    </tr>
-                `).join('');
+                .map(file => `<p><strong>${file.size}:</strong> ${file.path}</p>`)
+                .join('');
             document.getElementById('largestFiles').innerHTML = largestFilesHtml;
 
-            // Update newest files
+            // Newest Files
             const newestFilesHtml = data.newest_files
-                .map(file => `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-2">${file.modified}</td>
-                        <td class="px-4 py-2 truncate max-w-xs">${file.path}</td>
-                    </tr>
-                `).join('');
+                .map(file => `<p><strong>${file.modified}:</strong> ${file.path}</p>`)
+                .join('');
             document.getElementById('newestFiles').innerHTML = newestFilesHtml;
-        }
-
-        function updateFileTypesChart(fileTypes) {
-            const ctx = document.getElementById('fileTypesChart').getContext('2d');
-            
-            if (fileTypesChart) {
-                fileTypesChart.destroy();
-            }
-
-            fileTypesChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: fileTypes.map(ft => ft.type),
-                    datasets: [{
-                        data: fileTypes.map(ft => ft.count),
-                        backgroundColor: [
-                            '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444',
-                            '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'right'
-                        }
-                    }
-                }
-            });
         }
     </script>
 </body>
