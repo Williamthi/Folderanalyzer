@@ -1,15 +1,30 @@
 # Folder Analyzer
 
-A Python tool that analyzes folders and provides detailed information about their contents without having to manually open each file.
+A Python web application that analyzes folders and provides detailed information about their contents, with a modern web interface and smart handling of cloud storage.
 
 ## Features
 
+- 🌐 Modern web interface with real-time progress tracking
 - 📊 Recursive folder scanning
 - 📁 File type detection using MIME types
 - 💾 File size analysis with human-readable formats
 - 🕒 Most recently modified files tracking
 - 📑 File type distribution statistics
 - 🔍 Text file content preview with encoding detection
+- ⚡ Smart cloud storage handling (OneDrive, Dropbox, etc.)
+- 📝 Analysis history with quick access to previous folders
+- ⚠️ Intelligent warnings for potential issues
+- ❌ Analysis cancellation support
+
+## Safety Features
+
+- 🛡️ Size limits (max 50GB total)
+- ⏱️ Time limits (max 15 minutes)
+- 📄 File count limits (max 10,000 files)
+- ☁️ Cloud storage protection:
+  - Skips files larger than 10MB in cloud folders
+  - Prevents unwanted large downloads
+  - Shows warnings for cloud storage operations
 
 ## Installation
 
@@ -30,22 +45,52 @@ Note: On Windows, you might need to install additional dependencies for python-m
 
 ## Usage
 
-Run the script:
+1. Start the web server:
 ```bash
-python folder_analyzer.py
+python web_app.py
 ```
 
-When prompted, enter the path of the folder you want to analyze, or press Enter to analyze the current directory.
+2. Open your browser and go to:
+```
+http://localhost:5000
+```
+
+3. Enter a folder path and click "Analyze"
+
+## Features Guide
+
+### Basic Analysis
+- Enter any folder path to analyze
+- View real-time progress with detailed status
+- Cancel analysis at any time if needed
+
+### Cloud Storage Support
+- Safely analyze OneDrive, Dropbox, and other cloud storage folders
+- Smart size limits prevent unwanted downloads
+- Clear warnings about skipped files
+
+### History Feature
+- Recently analyzed folders are saved locally
+- Quick access to previous analyses
+- History is not included in Git (stays private)
 
 ## Output
 
-The tool will display:
-1. Total number of files and combined size
-2. Distribution of file types
-3. Top 10 largest files
-4. Top 10 most recently modified files
+The analysis provides:
+1. Project type detection
+2. Total number of files and combined size
+3. Distribution of file types
+4. Top 10 largest files
+5. Top 10 most recently modified files
+6. Content analysis and grouping
+7. Warnings and potential issues
 
 ## Requirements
 
 - Python 3.6+
-- Dependencies listed in requirements.txt 
+- Modern web browser
+- Dependencies listed in requirements.txt
+
+## Privacy Note
+
+The folder history feature stores data locally and is not included in Git commits. The `.gitignore` file ensures your analysis history remains private. 
