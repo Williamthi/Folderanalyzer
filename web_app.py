@@ -186,4 +186,4 @@ def cancel_analysis():
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     Path('templates').mkdir(exist_ok=True)
-    app.run(debug=True, port=5000, use_debugger=False) 
+    app.run(debug=True, port=5000, use_debugger=False, host='0.0.0.0') 

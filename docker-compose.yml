@@ -1,0 +1,8 @@
+services:
+  folderanalyzer:
+    build:
+      context: .
+    ports:
+      - 5000:5000
+    volumes:
+      - .:/mnt/test:ro

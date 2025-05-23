@@ -91,6 +91,14 @@ The analysis provides:
 - Modern web browser
 - Dependencies listed in requirements.txt
 
+## Docker
+
+The application can also be run as a docker image. See [`docker-compose.yml`](./docker-compose.yml) for an example usage. Mount the volumes you'd like to browse in the docker container and start it with
+
+```sh
+docker compose up
+```
+
 ## Privacy Note
 
 The folder history feature stores data locally and is not included in Git commits. The `.gitignore` file ensures your analysis history remains private. 
