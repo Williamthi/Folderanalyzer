@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Folder Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold mb-8 text-center text-gray-800">Folder Analyzer</h1>
+        
+        <!-- Folder Input -->
+        <div class="mb-8 max-w-xl mx-auto">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="folderPath">
+                    Folder Path
+                </label>
+                <div class="flex">
+                    <input type="text" id="folderPath" 
+                           class="flex-1 shadow appearance-none border rounded py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                           placeholder="Enter folder path or use current directory">
+                    <button onclick="analyzePath()" id="analyzeButton"
+                            class="ml-4 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                        Analyze
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progress" class="mb-8 max-w-xl mx-auto hidden">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold mb-4">Analysis Progress</h3>
+                <div class="mb-4">
+                    <div class="flex justify-between mb-1">
+                        <span id="progressStage" class="text-sm font-medium text-gray-700">Initializing...</span>
+                        <span id="progressPercentage" class="text-sm font-medium text-gray-700">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="text-sm text-gray-600">
+                    <p id="currentFile" class="truncate"></p>
+                    <p id="elapsedTime"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden">
+            <div class="flex justify-center items-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            </div>
+        </div>
+
+        <!-- Results Container -->
+        <div id="results" class="hidden">
+            <!-- Project Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-2">Project Type</h3>
+                    <p id="projectType" class="text-2xl font-bold text-blue-600"></p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-2">Total Files</h3>
+                    <p id="totalFiles" class="text-2xl font-bold text-green-600"></p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-2">Total Size</h3>
+                    <p id="totalSize" class="text-2xl font-bold text-purple-600"></p>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">File Types Distribution</h3>
+                    <canvas id="fileTypesChart"></canvas>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">Content Analysis</h3>
+                    <div id="contentAnalysis" class="overflow-auto max-h-96"></div>
+                </div>
+            </div>
+
+            <!-- Tables -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">Largest Files</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left">Size</th>
+                                    <th class="px-4 py-2 text-left">Path</th>
+                                </tr>
+                            </thead>
+                            <tbody id="largestFiles"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold mb-4">Recent Files</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-4 py-2 text-left">Modified</th>
+                                    <th class="px-4 py-2 text-left">Path</th>
+                                </tr>
+                            </thead>
+                            <tbody id="newestFiles"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let fileTypesChart = null;
+        let progressInterval = null;
+
+        function formatTime(seconds) {
+            if (seconds < 60) return `${Math.round(seconds)}s`;
+            const minutes = Math.floor(seconds / 60);
+            seconds = Math.round(seconds % 60);
+            return `${minutes}m ${seconds}s`;
+        }
+
+        async function checkProgress() {
+            try {
+                const response = await fetch('http://localhost:5000/progress');
+                const progress = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('progressStage').textContent = progress.stage;
+                    document.getElementById('progressPercentage').textContent = `${Math.round(progress.percentage)}%`;
+                    document.getElementById('progressBar').style.width = `${progress.percentage}%`;
+                    
+                    if (progress.current_file) {
+                        document.getElementById('currentFile').textContent = `Current file: ${progress.current_file}`;
+                    }
+                    
+                    if (progress.elapsed_time) {
+                        document.getElementById('elapsedTime').textContent = `Elapsed time: ${formatTime(progress.elapsed_time)}`;
+                    }
+
+                    if (progress.stage === 'Analysis complete') {
+                        clearInterval(progressInterval);
+                    }
+                } else {
+                    clearInterval(progressInterval);
+                }
+            } catch (error) {
+                console.error('Failed to fetch progress:', error);
+            }
+        }
+
+        async function analyzePath() {
+            const path = document.getElementById('folderPath').value || '.';
+            const analyzeButton = document.getElementById('analyzeButton');
+            
+            // Show progress and disable button
+            document.getElementById('progress').classList.remove('hidden');
+            document.getElementById('results').classList.add('hidden');
+            analyzeButton.disabled = true;
+            analyzeButton.classList.add('opacity-50');
+            
+            // Start progress checking
+            progressInterval = setInterval(checkProgress, 500);
+            
+            try {
+                const response = await fetch('http://localhost:5000/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ path }),
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    displayResults(data);
+                } else {
+                    alert(data.error || 'An error occurred');
+                }
+            } catch (error) {
+                alert('Failed to analyze folder: ' + error);
+            } finally {
+                clearInterval(progressInterval);
+                analyzeButton.disabled = false;
+                analyzeButton.classList.remove('opacity-50');
+            }
+        }
+
+        function displayResults(data) {
+            // Show results container
+            document.getElementById('results').classList.remove('hidden');
+            
+            // Update overview
+            document.getElementById('projectType').textContent = data.project_overview.project_type;
+            document.getElementById('totalFiles').textContent = data.project_overview.total_files;
+            document.getElementById('totalSize').textContent = data.project_overview.total_size;
+
+            // Update file types chart
+            updateFileTypesChart(data.file_types);
+
+            // Update content analysis
+            const contentAnalysisHtml = Object.entries(data.content_analysis)
+                .map(([type, info]) => `
+                    <div class="mb-4">
+                        <h4 class="font-semibold text-gray-700">${type} (${info.count} files)</h4>
+                        <ul class="list-disc list-inside">
+                            ${info.files.map(file => `
+                                <li class="ml-4 text-sm">
+                                    ${file.path}
+                                    ${file.dependencies.length ? 
+                                        `<br><span class="text-gray-600 text-xs">Dependencies: ${file.dependencies.join(', ')}</span>` 
+                                        : ''}
+                                    ${file.purpose ? 
+                                        `<br><span class="text-gray-600 text-xs">Purpose: ${file.purpose}</span>` 
+                                        : ''}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `).join('');
+            document.getElementById('contentAnalysis').innerHTML = contentAnalysisHtml;
+
+            // Update largest files
+            const largestFilesHtml = data.largest_files
+                .map(file => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2">${file.size}</td>
+                        <td class="px-4 py-2 truncate max-w-xs">${file.path}</td>
+                    </tr>
+                `).join('');
+            document.getElementById('largestFiles').innerHTML = largestFilesHtml;
+
+            // Update newest files
+            const newestFilesHtml = data.newest_files
+                .map(file => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2">${file.modified}</td>
+                        <td class="px-4 py-2 truncate max-w-xs">${file.path}</td>
+                    </tr>
+                `).join('');
+            document.getElementById('newestFiles').innerHTML = newestFilesHtml;
+        }
+
+        function updateFileTypesChart(fileTypes) {
+            const ctx = document.getElementById('fileTypesChart').getContext('2d');
+            
+            if (fileTypesChart) {
+                fileTypesChart.destroy();
+            }
+
+            fileTypesChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: fileTypes.map(ft => ft.type),
+                    datasets: [{
+                        data: fileTypes.map(ft => ft.count),
+                        backgroundColor: [
+                            '#3B82F6', '#10B981', '#8B5CF6', '#F59E0B', '#EF4444',
+                            '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#84CC16'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html> 
