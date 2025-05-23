@@ -3,6 +3,6 @@ services:
     build:
       context: .
     ports:
-      - 3323:5000
+      - 5000:5000
     volumes:
       - .:/mnt/test:ro
