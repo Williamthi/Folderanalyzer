@@ -8,6 +8,14 @@ import threading
 app = Flask(__name__)
 CORS(app)
 
+# Security headers
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
 # Global variable to store the current analyzer instance
 current_analyzer = None
 analysis_lock = threading.Lock()
@@ -107,4 +115,5 @@ def get_progress():
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     Path('templates').mkdir(exist_ok=True)
-    app.run(debug=True, port=5000) 
+    # Run without exposing debug PIN
+    app.run(debug=True, port=5000, use_debugger=False) 

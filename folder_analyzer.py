@@ -166,8 +166,15 @@ class FolderAnalyzer:
         except:
             mime_type = mimetypes.guess_type(str(file_path))[0] or 'unknown'
 
+        # Convert to relative path for display
+        try:
+            relative_path = str(file_path.relative_to(self.root_path))
+        except ValueError:
+            relative_path = str(file_path)
+
         file_info = {
-            'path': str(file_path),
+            'path': relative_path,  # Use relative path instead of absolute
+            'absolute_path': str(file_path),  # Keep absolute path for internal use
             'size': size,
             'size_human': self.human_size(size),
             'created': created,
